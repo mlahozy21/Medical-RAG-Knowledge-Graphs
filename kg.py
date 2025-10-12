@@ -5,8 +5,6 @@ import pickle
 from typing import List, Optional, Tuple, Dict
 from rdflib import Graph
 from rdflib.namespace import RDFS, SKOS
-from langchain_core.runnables import RunnablePassthrough
-from langchain_core.output_parsers import StrOutputParser
 from pydantic import BaseModel, Field, field_validator, model_validator
 from pydantic_core import PydanticCustomError
 from json_repair import repair_json
