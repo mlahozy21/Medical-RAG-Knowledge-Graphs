@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "kgcolpali"
+version = "0.1.0"
+description = "Multimodal medical RAG combining ColPali visual retrieval, Google Gemini, and a Mondo Knowledge Graph, evaluated on the MIRAGE benchmark."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Marcos Lahoz" }]
+keywords = ["RAG", "ColPali", "knowledge-graph", "medical-nlp", "MIRAGE", "Gemini"]
+
+dependencies = [
+    "torch>=2.1",
+    "transformers>=4.44",
+    "colpali-engine>=0.3.5",
+    "datasets>=2.19",
+    "Pillow>=10.0",
+    "numpy>=1.24",
+    "faiss-cpu>=1.8",
+    "google-generativeai>=0.7",
+    "rdflib>=7.0",
+    "pydantic>=2.5",
+    "json-repair>=0.25",
+    "python-liquid>=1.12",
+    "tqdm>=4.66",
+    "python-dotenv>=1.0",
+]
+
+[project.urls]
+Repository = "https://github.com/mlahozy21/KgColPali-LABORATOIRE-MICS-INTERNSHIP-"
+
+[tool.setuptools.packages.find]
+where = ["src"]

@@ -7,7 +7,7 @@ from rdflib import Graph, URIRef, Literal
 from pydantic import BaseModel, Field, field_validator, model_validator
 from pydantic_core import PydanticCustomError
 from json_repair import repair_json
-from api import gemini, generate_with_retry
+from .api import gemini, generate_with_retry
 from liquid import Template
 from enum import Enum
 

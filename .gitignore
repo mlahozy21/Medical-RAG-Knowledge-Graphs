@@ -27,3 +27,4 @@ syntheticDocQA_*/
 # --- Operating system ---
 .DS_Store
 Thumbs.db
+src/**/*.egg-info/

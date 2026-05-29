@@ -1,10 +1,10 @@
 import torch
 from io import BytesIO
 from PIL import Image
-from api import gemini, apitemplates, generate_with_retry
-from colpali import colpalimodel, processor
-from embeddings import dataset, image_embeddings
-from kg import get_entity_context
+from .api import gemini, apitemplates, generate_with_retry
+from .colpali import colpalimodel, processor
+from .embeddings import dataset, image_embeddings
+from .kg import get_entity_context
 device = "cuda:0" if torch.cuda.is_available() else "cpu"
 
             

@@ -4,8 +4,8 @@ import random
 
 from tqdm import tqdm
 
-from functions import medrag_answer
-from utilsmirage import QADataset
+from kgcolpali.functions import medrag_answer
+from kgcolpali.utils import QADataset
 
 # Modes: 1. LLM only, 2. RAG only, 3. RAG and KG context, 4. RAG and KG retrieve
 KG_MODE = 1

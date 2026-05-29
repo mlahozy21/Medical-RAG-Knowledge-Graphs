@@ -1,7 +1,7 @@
 import os
 import json
 import re
-from utilsmirage import QADataset
+from kgcolpali.utils import QADataset
 import numpy as np
 
 def evaluate(pred_file, split="test"):

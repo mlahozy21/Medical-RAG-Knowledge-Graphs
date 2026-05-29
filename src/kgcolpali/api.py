@@ -2,10 +2,9 @@ import os
 import time
 import random as _random
 import google.generativeai as genai
-import torch
 from dotenv import load_dotenv
 
-from template import *
+from .templates import *
 # Load the API key from the environment (.env file). Never hardcode keys.
 load_dotenv()
 GOOGLE_API_KEY = os.environ.get("GOOGLE_API_KEY")
