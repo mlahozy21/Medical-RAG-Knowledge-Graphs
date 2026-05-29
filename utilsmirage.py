@@ -66,7 +66,7 @@ def locate_answer(sentence:str):
     if len(ans) > 0:
         return ans[0].upper()
 
-    return "A"
+    return None  # no answer found; let the caller treat it as unanswered
 
 def locate_answer4pub_llama(sentence:str):
 
@@ -90,4 +90,4 @@ def locate_answer4pub_llama(sentence:str):
     if len(ans) > 0:
         return ans[0].upper()    
 
-    return "A"
+    return None  # no answer found; let the caller treat it as unanswered

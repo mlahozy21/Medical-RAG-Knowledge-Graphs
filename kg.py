@@ -3,12 +3,11 @@ import json
 import os
 import pickle
 from typing import List, Optional, Tuple, Dict
-from rdflib import Graph
-from rdflib.namespace import RDFS, SKOS
+from rdflib import Graph, URIRef, Literal
 from pydantic import BaseModel, Field, field_validator, model_validator
 from pydantic_core import PydanticCustomError
 from json_repair import repair_json
-from api import gemini
+from api import gemini, generate_with_retry
 from liquid import Template
 from enum import Enum
 
@@ -167,14 +166,20 @@ def get_entities(query: str) -> dict:
         {"text": rendered_prompt},
         {"text": query}
     ]
-    response = gemini.generate_content(content)
+    response = generate_with_retry(gemini, content)
     print(f"Gemini output: {response}")
     
-    # Extract the text from the response and clean the markdown block
+    # Robustly parse the (possibly messy / fenced) JSON returned by the LLM.
     response_text = response.candidates[0].content.parts[0].text
-    json_str = response_text.strip()[7:-3]  # Remove ```json
-    parsed_response = json.loads(json_str)
-    
+    try:
+        parsed_response = json.loads(repair_json(response_text))
+        if not isinstance(parsed_response, dict) or "nouns" not in parsed_response:
+            print(f"Unexpected entity-linking output, defaulting to no nouns: {response_text!r}")
+            parsed_response = {"nouns": []}
+    except Exception as e:
+        print(f"Could not parse entity-linking response ({e}): {response_text!r}")
+        parsed_response = {"nouns": []}
+
     # Cache the result
     cache["nouns"][query] = parsed_response
     save_cache(cache)
@@ -196,7 +201,7 @@ def get_relationships(entity_uris: Tuple[str, ...]) -> List[EntityRelationship]:
         sparql_query = """
         SELECT ?relation ?target ?source_label ?target_label
         WHERE {
-            { <%s> ?relation ?target .
+            { ?source ?relation ?target .
               FILTER (?relation IN (
                   <http://www.w3.org/2000/01/rdf-schema#subClassOf>,
                   <http://purl.obolibrary.org/obo/RO_0002206>,
@@ -206,15 +211,15 @@ def get_relationships(entity_uris: Tuple[str, ...]) -> List[EntityRelationship]:
                   <http://purl.obolibrary.org/obo/RO_0004003>
               ))
             }
-            OPTIONAL { <%s> rdfs:label ?source_label . FILTER (lang(?source_label) = "" || lang(?source_label) = "en") }
+            OPTIONAL { ?source rdfs:label ?source_label . FILTER (lang(?source_label) = "" || lang(?source_label) = "en") }
             OPTIONAL { ?target rdfs:label ?target_label . FILTER (lang(?target_label) = "" || lang(?target_label) = "en") }
             FILTER (STRSTARTS(STR(?target), "http://purl.obolibrary.org/obo/MONDO_") ||
                     STRSTARTS(STR(?target), "http://identifiers.org/hgnc/") ||
                     STRSTARTS(STR(?target), "http://purl.obolibrary.org/obo/CHR_") ||
                     STRSTARTS(STR(?target), "http://purl.obolibrary.org/obo/HP_"))
         }
-        """ % (source_uri, source_uri)
-        for row in g.query(sparql_query):
+        """
+        for row in g.query(sparql_query, initBindings={"source": URIRef(source_uri)}):
             try:
                 relationships.append(EntityRelationship(
                     source_uri=source_uri,
@@ -245,15 +250,15 @@ def fetch_entity_details(uri: str) -> Tuple[Optional[str], List[str], List[str]]
     sparql_query = """
     SELECT ?label
     WHERE {
-        { <%s> rdfs:label ?label . }
-        UNION { <%s> <http://www.w3.org/2004/02/skos/core#prefLabel> ?label . }
-        UNION { <%s> <http://www.geneontology.org/formats/oboInOwl#hasExactSynonym> ?label . }
+        { ?uri rdfs:label ?label . }
+        UNION { ?uri <http://www.w3.org/2004/02/skos/core#prefLabel> ?label . }
+        UNION { ?uri <http://www.geneontology.org/formats/oboInOwl#hasExactSynonym> ?label . }
         FILTER (lang(?label) = "" || lang(?label) = "en")
     }
     ORDER BY STRLEN(?label)
     LIMIT 1
-    """ % (uri, uri, uri)
-    for row in g.query(sparql_query):
+    """
+    for row in g.query(sparql_query, initBindings={"uri": URIRef(uri)}):
         label = str(row.label)
     print(f"Fetched label for {uri}: {label}")
 
@@ -262,14 +267,14 @@ def fetch_entity_details(uri: str) -> Tuple[Optional[str], List[str], List[str]]
     sparql_query = """
     SELECT ?definition
     WHERE {
-        { <%s> <http://purl.obolibrary.org/obo/IAO_0000115> ?definition . }
-        UNION { <%s> <http://www.w3.org/2004/02/skos/core#definition> ?definition . }
-        UNION { <%s> <http://www.geneontology.org/formats/oboInOwl#hasDefinition> ?definition . }
+        { ?uri <http://purl.obolibrary.org/obo/IAO_0000115> ?definition . }
+        UNION { ?uri <http://www.w3.org/2004/02/skos/core#definition> ?definition . }
+        UNION { ?uri <http://www.geneontology.org/formats/oboInOwl#hasDefinition> ?definition . }
         FILTER (lang(?definition) = "" || lang(?definition) = "en")
     }
     LIMIT 1
-    """ % (uri, uri, uri)
-    for row in g.query(sparql_query):
+    """
+    for row in g.query(sparql_query, initBindings={"uri": URIRef(uri)}):
         definition = str(row.definition)
     print(f"Fetched definition for {uri}: {definition}")
 
@@ -286,20 +291,20 @@ def fetch_entity_details(uri: str) -> Tuple[Optional[str], List[str], List[str]]
     sparql_query = """
     SELECT ?label
     WHERE {
-        { <%s> <http://www.w3.org/2004/02/skos/core#exactMatch> ?synonym .
+        { ?uri <http://www.w3.org/2004/02/skos/core#exactMatch> ?synonym .
           { ?synonym rdfs:label ?label . }
           UNION { ?synonym <http://www.w3.org/2004/02/skos/core#prefLabel> ?label . }
           UNION { ?synonym <http://www.w3.org/2004/02/skos/core#altLabel> ?label . }
         }
-        UNION { <%s> <http://www.w3.org/2004/02/skos/core#altLabel> ?label . }
-        UNION { <%s> <http://www.geneontology.org/formats/oboInOwl#hasExactSynonym> ?label . }
-        UNION { <%s> <http://www.geneontology.org/formats/oboInOwl#hasRelatedSynonym> ?label . }
+        UNION { ?uri <http://www.w3.org/2004/02/skos/core#altLabel> ?label . }
+        UNION { ?uri <http://www.geneontology.org/formats/oboInOwl#hasExactSynonym> ?label . }
+        UNION { ?uri <http://www.geneontology.org/formats/oboInOwl#hasRelatedSynonym> ?label . }
         FILTER (lang(?label) = "" || lang(?label) = "en")
         FILTER (!STRSTARTS(str(?label), "http://"))
     }
     LIMIT 10
-    """ % (uri, uri, uri, uri)
-    for row in g.query(sparql_query):
+    """
+    for row in g.query(sparql_query, initBindings={"uri": URIRef(uri)}):
         synonym_label = str(row.label)
         print(f"Found synonym for {uri}: {synonym_label}")
         if synonym_label and not synonym_label.startswith("http://"):
@@ -313,11 +318,11 @@ def fetch_entity_details(uri: str) -> Tuple[Optional[str], List[str], List[str]]
     sparql_query = """
     SELECT ?xref
     WHERE {
-        <%s> <http://www.geneontology.org/formats/oboInOwl#hasDbXref> ?xref .
+        ?uri <http://www.geneontology.org/formats/oboInOwl#hasDbXref> ?xref .
     }
     LIMIT 10
-    """ % uri
-    for row in g.query(sparql_query):
+    """
+    for row in g.query(sparql_query, initBindings={"uri": URIRef(uri)}):
         xref = str(row.xref)
         if xref.startswith(("ICD10", "ICD9", "MESH")):
             xrefs.append(xref)
@@ -339,10 +344,9 @@ def format_context(context: EntityContext) -> str:
             line += f". Relevant medical codes include {', '.join(entity.xrefs)}"
         lines.append(line)
     
-    else:
-        for rel in context.relationships:
-            rel_type = rel.relation.split("#")[-1] if "#" in rel.relation else rel.relation
-            lines.append(f"Relationship: {rel.source_label or rel.source_uri} {rel_type} {rel.target_label or rel.target_uri}")
+    for rel in context.relationships:
+        rel_type = rel.relation.split("#")[-1] if "#" in rel.relation else rel.relation
+        lines.append(f"Relationship: {rel.source_label or rel.source_uri} {rel_type} {rel.target_label or rel.target_uri}")
     
     return "\n".join(lines)
 
@@ -354,27 +358,27 @@ def verify_entities(nouns: List[str]) -> None:
         WHERE {
             {
                 ?entity rdfs:label ?label .
-                FILTER (CONTAINS(LCASE(str(?label)), LCASE("%s")))
+                FILTER (CONTAINS(LCASE(str(?label)), LCASE(?noun)))
             } UNION {
                 ?entity <http://www.w3.org/2004/02/skos/core#prefLabel> ?label .
-                FILTER (CONTAINS(LCASE(str(?label)), LCASE("%s")))
+                FILTER (CONTAINS(LCASE(str(?label)), LCASE(?noun)))
             } UNION {
                 ?entity <http://www.w3.org/2004/02/skos/core#altLabel> ?label .
-                FILTER (CONTAINS(LCASE(str(?label)), LCASE("%s")))
+                FILTER (CONTAINS(LCASE(str(?label)), LCASE(?noun)))
             } UNION {
                 ?entity <http://www.geneontology.org/formats/oboInOwl#hasExactSynonym> ?label .
-                FILTER (CONTAINS(LCASE(str(?label)), LCASE("%s")))
+                FILTER (CONTAINS(LCASE(str(?label)), LCASE(?noun)))
             } UNION {
                 ?entity <http://www.geneontology.org/formats/oboInOwl#hasRelatedSynonym> ?label .
-                FILTER (CONTAINS(LCASE(str(?label)), LCASE("%s")))
+                FILTER (CONTAINS(LCASE(str(?label)), LCASE(?noun)))
             }
             FILTER (STRSTARTS(STR(?entity), "http://purl.obolibrary.org/obo/MONDO_"))
             FILTER (lang(?label) = "" || lang(?label) = "en")
         }
         LIMIT 5
-        """ % (noun, noun, noun, noun, noun)
+        """
         print(f"Diagnostic query for '{noun}':")
-        for row in g.query(sparql_query):
+        for row in g.query(sparql_query, initBindings={"noun": Literal(noun)}):
             print(f" - Found: URI={row.entity}, Label={row.label}")
 
 def get_entity_context(query: str) -> str:
@@ -406,32 +410,32 @@ def get_entity_context(query: str) -> str:
             WHERE {
                 {
                     ?entity rdfs:label ?label .
-                    FILTER (LCASE(str(?label)) = LCASE("%s"))
+                    FILTER (LCASE(str(?label)) = LCASE(?noun))
                 } UNION {
                     ?entity <http://www.w3.org/2004/02/skos/core#prefLabel> ?label .
-                    FILTER (LCASE(str(?label)) = LCASE("%s"))
+                    FILTER (LCASE(str(?label)) = LCASE(?noun))
                 } UNION {
                     ?entity <http://www.w3.org/2004/02/skos/core#altLabel> ?label .
-                    FILTER (LCASE(str(?label)) = LCASE("%s"))
+                    FILTER (LCASE(str(?label)) = LCASE(?noun))
                 } UNION {
                     ?entity <http://www.geneontology.org/formats/oboInOwl#hasExactSynonym> ?label .
-                    FILTER (LCASE(str(?label)) = LCASE("%s"))
+                    FILTER (LCASE(str(?label)) = LCASE(?noun))
                 } UNION {
                     ?entity <http://www.w3.org/2004/02/skos/core#hasRelatedSynonym> ?label .
-                    FILTER (LCASE(str(?label)) = LCASE("%s"))
+                    FILTER (LCASE(str(?label)) = LCASE(?noun))
                 } UNION {
                     ?entity <http://www.w3.org/2004/02/skos/core#exactMatch> ?synonym .
                     ?synonym rdfs:label ?label .
-                    FILTER (LCASE(str(?label)) = LCASE("%s"))
+                    FILTER (LCASE(str(?label)) = LCASE(?noun))
                 }
                 FILTER (STRSTARTS(STR(?entity), "http://purl.obolibrary.org/obo/MONDO_"))
                 FILTER (lang(?label) = "" || lang(?label) = "en")
             }
             ORDER BY STRLEN(?label)
             LIMIT 1
-            """ % (noun, noun, noun, noun, noun, noun)
+            """
             
-            result = g.query(sparql_query)
+            result = g.query(sparql_query, initBindings={"noun": Literal(noun)})
             found = False
             exact_match = True
             for row in result:
@@ -448,23 +452,23 @@ def get_entity_context(query: str) -> str:
                 WHERE {
                     {
                         ?entity rdfs:label ?label .
-                        FILTER (CONTAINS(LCASE(str(?label)), LCASE("%s")))
+                        FILTER (CONTAINS(LCASE(str(?label)), LCASE(?noun)))
                     } UNION {
                         ?entity <http://www.w3.org/2004/02/skos/core#prefLabel> ?label .
-                        FILTER (CONTAINS(LCASE(str(?label)), LCASE("%s")))
+                        FILTER (CONTAINS(LCASE(str(?label)), LCASE(?noun)))
                     } UNION {
                         ?entity <http://www.w3.org/2004/02/skos/core#altLabel> ?label .
-                        FILTER (CONTAINS(LCASE(str(?label)), LCASE("%s")))
+                        FILTER (CONTAINS(LCASE(str(?label)), LCASE(?noun)))
                     } UNION {
                         ?entity <http://www.geneontology.org/formats/oboInOwl#hasExactSynonym> ?label .
-                        FILTER (CONTAINS(LCASE(str(?label)), LCASE("%s")))
+                        FILTER (CONTAINS(LCASE(str(?label)), LCASE(?noun)))
                     } UNION {
                         ?entity <http://www.w3.org/2004/02/skos/core#hasRelatedSynonym> ?label .
-                        FILTER (CONTAINS(LCASE(str(?label)), LCASE("%s")))
+                        FILTER (CONTAINS(LCASE(str(?label)), LCASE(?noun)))
                     } UNION {
                         ?entity <http://www.w3.org/2004/02/skos/core#exactMatch> ?synonym .
                         ?synonym rdfs:label ?label .
-                        FILTER (CONTAINS(LCASE(str(?label)), LCASE("%s")))
+                        FILTER (CONTAINS(LCASE(str(?label)), LCASE(?noun)))
                     }
                     FILTER (STRSTARTS(STR(?entity), "http://purl.obolibrary.org/obo/MONDO_"))
                     FILTER (lang(?label) = "" || lang(?label) = "en")
@@ -473,9 +477,9 @@ def get_entity_context(query: str) -> str:
                 }
                 ORDER BY ?subclass_count STRLEN(?label)
                 LIMIT 1
-                """ % (noun, noun, noun, noun, noun, noun)
+                """
                 
-                result = g.query(sparql_query)
+                result = g.query(sparql_query, initBindings={"noun": Literal(noun)})
                 exact_match = False
                 for row in result:
                     uri = str(row.entity)

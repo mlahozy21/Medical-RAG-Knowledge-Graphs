@@ -1,0 +1,30 @@
+# KgColPali — Python dependencies
+# Tested with Python 3.10. Versions are recommended minimums;
+# adjust torch to your machine's CUDA build (https://pytorch.org/get-started/locally/).
+
+# --- Deep learning core / multimodal retrieval ---
+torch>=2.1
+transformers>=4.44
+colpali-engine>=0.3.5          # provides BiQwen2_5 and BiQwen2_5_Processor
+datasets>=2.19
+Pillow>=10.0
+numpy>=1.24
+faiss-cpu>=1.8                 # use faiss-gpu if you have CUDA and prefer it
+
+# --- Generative LLM (Gemini) ---
+google-generativeai>=0.7
+
+# --- Knowledge Graph (Mondo) ---
+rdflib>=7.0
+
+# --- Validation, parsing and templating ---
+pydantic>=2.5                  # uses field_validator / model_validator (v2 API)
+json-repair>=0.25             # robust parsing of the LLM's JSON output
+python-liquid>=1.12           # provides `from liquid import Template`
+
+# --- Utilities ---
+tqdm>=4.66
+python-dotenv>=1.0            # load keys from .env (see README)
+
+# Optional (speeds up attention if your GPU supports it):
+# flash-attn>=2.5

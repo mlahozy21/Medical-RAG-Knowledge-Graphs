@@ -1,0 +1,29 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.ipynb_checkpoints/
+.venv/
+venv/
+env/
+
+# --- Secrets / local config ---
+.env
+*.key
+
+# --- Pipeline-generated artifacts ---
+kg_cache.pkl
+unmatched_nouns.txt
+prediction/
+corpus/
+
+# --- Heavy data and embeddings (do not version) ---
+*.pt
+*.nt
+mondo.nt
+benchmark.json
+syntheticDocQA_*/
+
+# --- Operating system ---
+.DS_Store
+Thumbs.db

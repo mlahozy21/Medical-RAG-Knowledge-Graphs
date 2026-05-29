@@ -1,26 +1,16 @@
-import os
-import re
-import json
-import tqdm
 import torch
-import time
-import argparse
-import transformers
-import google.generativeai.types as genai_types
 from io import BytesIO
-import sys
-import numpy as np
 from PIL import Image
-from api import gemini, apitemplates
+from api import gemini, apitemplates, generate_with_retry
 from colpali import colpalimodel, processor
 from embeddings import dataset, image_embeddings
 from kg import get_entity_context
-device = "cuda:0"
+device = "cuda:0" if torch.cuda.is_available() else "cpu"
 
             
 def select(threshold, query_embeddings, image_embeddings, k):
     scores = processor.score_multi_vector(query_embeddings, image_embeddings)
-    if threshold > 0:  # Assuming 'seuil' is a boolean condition
+    if threshold > 0:  # apply a score threshold before selecting top-k
         # Create a boolean mask for elements greater than 0.15
         mask = scores > threshold
         # Get the indices of the elements that meet the condition
@@ -193,7 +183,7 @@ def medrag_answer(question, options=None,k=32, kg=1,thresholdrag=0,thresholdkg=0
     # Add retrieved images
     content= prepare_snippets_for_gemini(retrieved_snippets,content)
     
-    response = gemini.generate_content(content)
+    response = generate_with_retry(gemini, content)
     answer = response.text.strip()
     
     return answer
