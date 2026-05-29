@@ -30,7 +30,7 @@ dependencies = [
 ]
 
 [project.urls]
-Repository = "https://github.com/mlahozy21/KgColPali-LABORATOIRE-MICS-INTERNSHIP-"
+Repository = "https://github.com/mlahozy21/Medical-RAG-Knowledge-Graphs"
 
 [tool.setuptools.packages.find]
 where = ["src"]

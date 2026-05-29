@@ -55,8 +55,8 @@ The pipeline supports four modes, selected via the `KG_MODE` constant in `script
 ## Installation
 
 ```bash
-git clone https://github.com/mlahozy21/KgColPali-LABORATOIRE-MICS-INTERNSHIP-.git
-cd KgColPali-LABORATOIRE-MICS-INTERNSHIP-
+git clone https://github.com/mlahozy21/Medical-RAG-Knowledge-Graphs.git
+cd Medical-RAG-Knowledge-Graphs
 
 python -m venv .venv
 source .venv/bin/activate          # On Windows: .venv\Scripts\activate
