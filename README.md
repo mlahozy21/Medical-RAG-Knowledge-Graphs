@@ -21,6 +21,29 @@ The pipeline supports four modes, selected via the `KG_MODE` constant in `script
 | 3 | RAG + KG context | RAG + textual context extracted from the Knowledge Graph. |
 | 4 | RAG + KG retrieve | The KG is also used to retrieve additional documents. |
 
+## Results
+
+Evaluated on a 1,000-question subset of **MIRAGE** (200 questions per dataset, fixed seed 42),
+with **Gemini 2.5 Flash-Lite** as the generator backbone. The table reports the best
+configuration of each family (mean accuracy); the full per-configuration sweep — score
+thresholds, `k`, and the three retrieval corpora — is in Table I of
+`docs/internship_report.pdf`.
+
+| Configuration | MMLU | MedQA | MedMCQA | PubMedQA | BioASQ | **Average** |
+|---|:---:|:---:|:---:|:---:|:---:|:---:|
+| LLM only (CoT) | 0.870 | 0.730 | 0.635 | 0.500 | 0.840 | **0.715** |
+| RAG + KG context *(best, thr=0.2)* | 0.860 | 0.730 | 0.645 | 0.490 | 0.850 | **0.715** |
+| RAG only *(best: Corpus C, k=5, thr=0.25)* | 0.860 | 0.775 | 0.615 | 0.500 | 0.885 | **0.727** |
+| **RAG + KG retrieve** *(best, k=3)* | 0.860 | 0.780 | 0.680 | 0.480 | 0.870 | **0.730** |
+
+The full hybrid (**RAG + KG retrieve**) gives the best overall accuracy, **0.730 vs. 0.715**
+for the LLM alone. The gain is modest but consistent, and concentrated on the clinical /
+exam datasets (MedQA 0.730 → 0.780, MedMCQA 0.635 → 0.680). PubMedQA stays the weak point
+across every configuration (~0.48–0.50), suggesting that a literature-oriented corpus
+(e.g. PubMed) would be needed there — using the KG to *retrieve* extra evidence helps more
+than only injecting KG text as context.
+
+
 ## Project structure
 
 ```
