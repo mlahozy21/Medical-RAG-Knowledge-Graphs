@@ -481,6 +481,9 @@ def get_entity_context(query: str) -> str:
                 
                 result = g.query(sparql_query, initBindings={"noun": Literal(noun)})
                 exact_match = False
+                # Initialize so the `not found` check below is safe even when the
+                # partial-match query returns zero rows (label would otherwise be unbound).
+                label = ""
                 for row in result:
                     uri = str(row.entity)
                     label = str(row.label)
@@ -526,10 +529,4 @@ def get_entity_context(query: str) -> str:
 
     context = EntityContext(entities=entities, relationships=relationships)
     context_text = format_context(context)
-    return context_text
-
-if __name__ == "__main__":
-    sample_query = "Is diabetes related with hypertension?"
-    context = get_entity_context(sample_query)
-    print("Generated Context:")
-    print(context)
+    retur

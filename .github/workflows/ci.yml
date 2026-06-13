@@ -13,7 +13,9 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - name: Install
-        run: pip install pytest
-      - name: Run unit tests (pure-Python pieces; the pipeline itself needs GPU + API keys)
+      - name: Install test deps
+        # numpy is required by scripts/evaluate.py; torch is optional and only
+        # needed for the select_from_scores tests (they skip if it is absent).
+        run: pip install pytest numpy
+      - name: Run unit tests (pure-Python pieces; the full pipeline needs GPU + API keys)
         run: pytest tests/ -q

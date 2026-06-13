@@ -8,37 +8,52 @@ from .kg import get_entity_context
 device = "cuda:0" if torch.cuda.is_available() else "cpu"
 
             
-def select(threshold, query_embeddings, image_embeddings, k):
-    scores = processor.score_multi_vector(query_embeddings, image_embeddings)
+def select_from_scores(scores, threshold, k):
+    """Select the top-k document indices from a 1-D score vector.
+
+    ``scores`` is a 1-D tensor with one score per document. When ``threshold``
+    is positive, only documents whose score strictly exceeds ``threshold`` are
+    eligible, and the (local) indices into the filtered set are mapped back to
+    the original document indices so the returned indices always index ``scores``
+    directly. When ``threshold`` is zero (or negative) the global top-k over all
+    documents is returned. This pure-tensor helper has no model dependency so it
+    can be unit-tested in isolation.
+    """
+    if scores.dim() != 1:
+        raise ValueError(f"select_from_scores expects a 1-D score vector, got shape {tuple(scores.shape)}")
     if threshold > 0:  # apply a score threshold before selecting top-k
-        # Create a boolean mask for elements greater than 0.15
+        # Boolean mask for documents whose score exceeds the passed threshold.
         mask = scores > threshold
-        # Get the indices of the elements that meet the condition
-        indices = torch.nonzero(mask, as_tuple=False)  # Shape: [n, 2]
-        # Take only the column indices (dimension 1)
-        if indices.numel() > 0:
-            indices = indices[:, 1]  # Select the column (indices of dimension 1)
-        else:
-            indices = torch.tensor([], dtype=torch.long)
-        # Filter the values that meet the condition
+        # Indices (into the 1-D score vector) of documents that pass the threshold.
+        indices = torch.nonzero(mask, as_tuple=False).squeeze(-1)
+        # Scores of the documents that pass the threshold.
         filtered_scores = scores[mask]
         if filtered_scores.numel() == 0:
             print(f"No values greater than {threshold}")
             top_k_scores = torch.tensor([])
-            top_k_indices = torch.tensor([])
+            top_k_indices = torch.tensor([], dtype=torch.long)
         else:
             # Apply topk to the filtered values
             top_k_scores, top_k_filtered_indices = torch.topk(
                 filtered_scores, k=min(k, filtered_scores.numel()), largest=True
             )
-            # Map the filtered indices to the original indices
+            # Map the filtered (local) indices back to the original document indices.
             top_k_indices = indices[top_k_filtered_indices]
             print(f"Filtered {len(filtered_scores)} scores greater than {threshold}")
             print(f"Selected these scores after applying topk: {top_k_scores}")
     else:
-        # If no filtering is applied, use the original tensor
-        top_k_scores, top_k_indices = torch.topk(scores[0], k=k, largest=True)
+        # No filtering: take the global top-k over all documents.
+        top_k_scores, top_k_indices = torch.topk(scores, k=min(k, scores.numel()), largest=True)
     return top_k_scores, top_k_indices
+
+
+def select(threshold, query_embeddings, image_embeddings, k):
+    # score_multi_vector returns shape [n_queries, n_docs]; we always score a
+    # single query here, so collapse to a 1-D vector of per-document scores and
+    # operate on that same 1-D vector in both branches.
+    scores = processor.score_multi_vector(query_embeddings, image_embeddings)
+    scores = scores[0]  # 1-D: one score per document
+    return select_from_scores(scores, threshold, k)
 
 def get_relevant_documents(question,kg=2,kg_context='', k=32,thresholdrag=0,thresholdkg=0, **kwarg):
     assert type(question) == str
@@ -161,29 +176,4 @@ def medrag_answer(question, options=None,k=32, kg=1,thresholdrag=0,thresholdkg=0
         else:
             system_prompt = apitemplates["kgcontext_system"]
             prompt_template = apitemplates["kgcontext_prompt"]
-            prompt = prompt_template.render(
-                kg_context=kg_context,
-                question=question,
-                options=options_text
-            ) 
-    elif kg == 4:
-        kg_context = get_entity_context(question)
-        retrieved_snippets,kg_context = get_relevant_documents(question=question,thresholdrag=thresholdrag,thresholdkg=thresholdkg,k=k, kg=4, kg_context=kg_context)
-        system_prompt = apitemplates["medrag_system"]
-        prompt_template = apitemplates["medrag_prompt"]
-        prompt = prompt_template.render(
-            question=question,
-            options=options_text
-        ) 
-    # Prepare input (text and retrieved images)
-    content = [
-        {"text": system_prompt},
-        {"text": prompt}
-    ]   
-    # Add retrieved images
-    content= prepare_snippets_for_gemini(retrieved_snippets,content)
-    
-    response = generate_with_retry(gemini, content)
-    answer = response.text.strip()
-    
-    return answer
+            prom

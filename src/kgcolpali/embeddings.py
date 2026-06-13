@@ -9,5 +9,4 @@ dataset = load_dataset("./syntheticDocQA_healthcare_industry_test", split="test"
 # Default so that `from embeddings import image_embeddings` never fails
 image_embeddings = None
 if os.path.exists(colpali_image_embeddings_path):
-    image_embeddings= torch.load(colpali_image_embeddings_path).to(device)
-    image_embeddings=i
+    image_embeddings = torch.load(colpali_image_embeddings_path).to(device)
