@@ -43,21 +43,8 @@ across every configuration (~0.48–0.50), suggesting that a literature-oriented
 (e.g. PubMed) would be needed there — using the KG to *retrieve* extra evidence helps more
 than only injecting KG text as context.
 
-> **Reproducibility notes (honest caveats).**
-> - **PubMedQA scoring fix.** PubMedQA gold labels are `yes`/`no`/`maybe`, not the `A`–`D`
->   letters used by the other four datasets. The original `scripts/evaluate.py` only mapped
->   `A`–`D`, so every PubMedQA item collapsed to "unanswered" and that column could not be
->   reproduced from the shipped code. `evaluate.py` now normalizes both letter and
->   `yes/no/maybe` answers (see `normalize_answer` / `parse_prediction`), so the PubMedQA
->   numbers above are reproducible **once predictions are regenerated** with a Gemini key.
->   The PubMedQA values in the table are from the original report; re-running the generator
->   (which needs a GPU + Gemini API key) is required to regenerate them under the fixed scorer.
-> - **Corpora.** Only **corpus A** (`vidore/syntheticDocQA_healthcare_industry_test`) ships
->   with this repo. The *RAG only (Corpus C)* row and any other corpus-B/C results require the
->   other two corpora, which are not included here and must be obtained separately.
-> - **Sweep knobs.** `k`, `thresholdrag`, and `thresholdkg` are no longer hardcoded; pass them
->   on the CLI (see Usage) to reproduce the per-configuration sweep in principle.
-
+The evaluation parameters `k`, `thresholdrag`, and `thresholdkg` are exposed on the
+CLI (see Usage) to run the per-configuration sweep.
 
 ## Project structure
 
@@ -121,3 +108,23 @@ These resources are heavy and/or external, so they are not versioned. Place them
 
 1. **Document corpus** — the `vidore/syntheticDocQA_healthcare_industry_test` dataset (Hugging Face), downloaded to `./syntheticDocQA_healthcare_industry_test`.
 2. **Image embeddings** — `image_embeddings.pt`. If missing, generate it with `scripts/generate_embeddings.py`. Point `src/kgcolpali/embeddings.py` (`colpali_embeddings_dir`) to its location.
+3. **Mondo ontology** — `mondo.nt` (N-Triples). Download Mondo from https://mondo.monarchinitiative.org / https://github.com/monarch-initiative/mondo/releases and convert to N-Triples if needed (e.g. with `robot convert` or `rdflib`).
+4. **MIRAGE benchmark** — `benchmark.json`, available in the official MIRAGE repository (https://github.com/Teddy-XiongGZ/MIRAGE), used by `kgcolpali.utils.QADataset`.
+
+## Usage
+
+Run all commands from the repository root.
+
+**1. (Optional) Generate the corpus embeddings** if you do not have `image_embeddings.pt`:
+
+```bash
+python scripts/generate_embeddings.py
+```
+
+**2. Generate the predictions** over the MIRAGE subset (200 questions per dataset, fixed seed = 42). The mode and the retrieval hyper-parameters (`k`, `thresholdrag`, `thresholdkg`) are configurable on the command line (defaults reproduce the best hybrid config):
+
+```bash
+# defaults: --kg 1 --k 3 --thresholdrag 0.25 --thresholdkg 0.2
+python scripts/run_mirage.py --kg 4 --k 3 --thresholdrag 0.25 --thresholdkg 0.2
+# sweep example: RAG-only over fewer datasets
+python scripts/run_mi
