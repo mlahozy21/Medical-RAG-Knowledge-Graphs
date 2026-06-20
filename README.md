@@ -127,4 +127,23 @@ python scripts/generate_embeddings.py
 # defaults: --kg 1 --k 3 --thresholdrag 0.25 --thresholdkg 0.2
 python scripts/run_mirage.py --kg 4 --k 3 --thresholdrag 0.25 --thresholdkg 0.2
 # sweep example: RAG-only over fewer datasets
-python scripts/run_mi
+python scripts/run_mirage.py --kg 2 --k 5 --datasets mmlu pubmedqa --n-samples 50
+```
+
+Predictions are saved to `prediction/<dataset>_predictions.json`.
+
+**3. Evaluate the accuracy**:
+
+```bash
+python scripts/evaluate.py
+```
+
+It prints the mean accuracy per dataset (`mmlu`, `medqa`, `medmcqa`, `pubmedqa`, `bioasq`) and the overall mean.
+
+## Citations
+
+See `docs/CITATIONS.md` (ColPali, ViDoRe Benchmark V2, and MIRAGE).
+
+## License
+
+Released under the MIT License — see `LICENSE`.

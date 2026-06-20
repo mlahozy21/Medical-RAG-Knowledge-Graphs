@@ -176,4 +176,29 @@ def medrag_answer(question, options=None,k=32, kg=1,thresholdrag=0,thresholdkg=0
         else:
             system_prompt = apitemplates["kgcontext_system"]
             prompt_template = apitemplates["kgcontext_prompt"]
-            prom
+            prompt = prompt_template.render(
+                kg_context=kg_context,
+                question=question,
+                options=options_text
+            ) 
+    elif kg == 4:
+        kg_context = get_entity_context(question)
+        retrieved_snippets,kg_context = get_relevant_documents(question=question,thresholdrag=thresholdrag,thresholdkg=thresholdkg,k=k, kg=4, kg_context=kg_context)
+        system_prompt = apitemplates["medrag_system"]
+        prompt_template = apitemplates["medrag_prompt"]
+        prompt = prompt_template.render(
+            question=question,
+            options=options_text
+        ) 
+    # Prepare input (text and retrieved images)
+    content = [
+        {"text": system_prompt},
+        {"text": prompt}
+    ]   
+    # Add retrieved images
+    content= prepare_snippets_for_gemini(retrieved_snippets,content)
+    
+    response = generate_with_retry(gemini, content)
+    answer = response.text.strip()
+    
+    return answer

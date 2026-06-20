@@ -529,4 +529,10 @@ def get_entity_context(query: str) -> str:
 
     context = EntityContext(entities=entities, relationships=relationships)
     context_text = format_context(context)
-    retur
+    return context_text
+
+if __name__ == "__main__":
+    sample_query = "Is diabetes related with hypertension?"
+    context = get_entity_context(sample_query)
+    print("Generated Context:")
+    print(context)
